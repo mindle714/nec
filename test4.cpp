@@ -6,12 +6,15 @@
 #include <string>
 #include <fst/determinize.h>
 #include <fst/intersect.h>
+#include <fst/shortest-path.h>
 
 using SM = fst::SigmaMatcher<
   fst::HashMatcher<fst::Fst<fst::StdArc>>>;
 
+// TODO no consecutive *(play ** by *)
+// TODO to be precise, +, not *
 int main() {
-  std::string pat = "p_*_b_*";
+  std::string pat = "play * by *";
 
   fst::SymbolTable st;
 
@@ -43,7 +46,7 @@ int main() {
 
   fst::StdVectorFst _fst2;
 
-  std::string input = "p_r_bp_b_g";
+  std::string input = "play over the rainbow by gundam z";
   for (const auto& c : input)
     st.AddSymbol(std::string(1, c));
 
@@ -71,6 +74,23 @@ int main() {
 
   fst::StdVectorFst _fst3;
   _fst3 = fst::IntersectFst<fst::StdArc>(_fst, _fst2, iopts);
-
   _fst3.Write("three.fst");
+
+  fst::StdVectorFst _fst4;
+  fst::ShortestPath<fst::StdArc>(_fst3, &_fst4);
+  _fst4.Write("four.fst");
+
+  if (_fst4.NumStates() == 0) {
+    std::cout << "no patterns matched" << std::endl;
+    return 0;
+  }
+
+  int ss = _fst4.Start();
+  while (_fst4.NumArcs(ss) > 0) {
+    fst::ArcIterator<fst::StdVectorFst> aiter(_fst4, ss);
+    if (aiter.Value().weight == 0) {
+      std::cout << st.Find(aiter.Value().ilabel) << std::endl;
+    }
+    ss = aiter.Value().nextstate;
+  }
 }
