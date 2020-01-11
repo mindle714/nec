@@ -10,27 +10,7 @@
 #include <fst/union.h>
 #include <fst/shortest-path.h>
 
-/*class MyArc : public fst::ArcTpl<fst::TropicalWeight> {
-public:
-  std::string cls = "";
-
-  MyArc() noexcept(std::is_nothrow_default_constructible<Weight>::value) {}
-
-  template <class T>
-  MyArc(Label ilabel, Label olabel, T &&weight, StateId nextstate)
-    : fst::ArcTpl<fst::TropicalWeight>(ilabel, olabel, weight, nextstate) {}
-
-  MyArc(Label ilabel, Label olabel, StateId nextstate)
-    : fst::ArcTpl<fst::TropicalWeight>(ilabel, olabel, nextstate) {}
-};*/
-
-//using SW = fst::StringWeight<std::string>;
-//using SW = fst::TropicalWeight;
-//using SA = fst::ArcTpl<SW>;
-//using SA = fst::StringArc<>;
-//using SA = MyArc;
 using SA = fst::StdArc;
-//using SA = fst::ArcTpl<fst::TropicalWeightTpl<int>>;
 using SF = fst::VectorFst<SA>;
 using SM = fst::SigmaMatcher<
   fst::HashMatcher<fst::Fst<SA>>>;
@@ -42,8 +22,6 @@ SF load_pats(fst::SymbolTable& st,
              fst::SymbolTable& nst,
              int* sigma,
              const std::vector<std::string>& pats) {
-  fst::StringArc<> sa(1,1,1,1);
-
   st.AddSymbol("_epsilon_");
   for (const auto& pat : pats) {
     for (const auto& c : pat)
@@ -144,8 +122,11 @@ void find_nes(const fst::SymbolTable& st_,
     return;
   }
 
+  std::string new_input = "";
+
   int pw = 0;
   std::string ne_str = "";
+
   int ss = _fst4.Start();
   while (_fst4.NumArcs(ss) > 0) {
     fst::ArcIterator<SF> aiter(_fst4, ss);
@@ -157,8 +138,12 @@ void find_nes(const fst::SymbolTable& st_,
     int w = aiter.Value().weight.Value();
     if (w != pw) {
       if (pw != 0 && !ne_str.empty()) {
+        // TODO here we can replace(correct) ne.
+        // for dummy i just wrap ne with <>.
         std::cout << nst.Find(pw) << " : " << ne_str << std::endl;
+        ne_str = "<" + ne_str + ">";
       }
+      new_input += ne_str;
       ne_str.clear();
     }
     ne_str += st.Find(aiter.Value().ilabel);
@@ -167,8 +152,11 @@ void find_nes(const fst::SymbolTable& st_,
   }
   if (pw != 0 && !ne_str.empty()) {
     std::cout << nst.Find(pw) << " : " << ne_str << std::endl;
+    ne_str = "<" + ne_str + ">";
   }
+  new_input += ne_str;
 
+  std::cout << "FINAL : " << new_input << std::endl;
 }
 
 // TODO no consecutive *(play ** by *)
@@ -178,7 +166,9 @@ int main() {
     "play {song} by {singer}",
     "I'd like to listen {song} from {singer}",
     "can I here {singer}'s {song} or {song}?",
-    "play {song} from {singer}"
+    "play {song} from {singer}",
+    "{singer}의 {song} 틀어 주세요",
+    "{singer}가 부른 {song} 듣고 싶어요"
   };
 
   fst::SymbolTable st, nst;
@@ -196,4 +186,6 @@ int main() {
       "play gundam z by from the hills");
   find_nes(st, nst, _pfst,
       "play gundam z from by the hills");
+  find_nes(st, nst, _pfst,
+      "빅토리 건담의 웃소가 부른 양귀비꽃이 듣고 싶어요");
 }
