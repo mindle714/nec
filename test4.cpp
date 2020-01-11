@@ -35,13 +35,13 @@ using SF = fst::VectorFst<SA>;
 using SM = fst::SigmaMatcher<
   fst::HashMatcher<fst::Fst<SA>>>;
 
+const std::string LEFT_NE = "{",
+  RIGHT_NE = "}";
+
 SF load_pats(fst::SymbolTable& st,
              fst::SymbolTable& nst,
              int* sigma,
              const std::vector<std::string>& pats) {
-  const std::string LEFT_NE = "{",
-        RIGHT_NE = "}";
-
   fst::StringArc<> sa(1,1,1,1);
 
   st.AddSymbol("_epsilon_");
@@ -90,7 +90,7 @@ SF load_pats(fst::SymbolTable& st,
       ++i;
     }
 
-    _fst.SetFinal(ps/*, std::string("")*/);
+    _fst.SetFinal(ps, 0);
     fst::Union(&_pfst, _fst);
   }
 
@@ -98,26 +98,17 @@ SF load_pats(fst::SymbolTable& st,
   return _pfst;
 }
 
-// TODO no consecutive *(play ** by *)
-// TODO no nested ne
-int main() {
-  std::vector<std::string> pats = {
-    "play {song} by {singer}",
-    "I'd like to listen {song} from {singer}",
-    "can I here {singer}'s {song} or {song}?"
-  };
+void find_nes(const fst::SymbolTable& st_,
+              const fst::SymbolTable& nst,
+              const SF& _pfst,
+              std::string input) {
+  fst::SymbolTable st = st_;
+  int sigma = st_.Find(LEFT_NE);
 
-  fst::SymbolTable st, nst;
-  int sigma;
-
-  SF _pfst = load_pats(st, nst, &sigma, pats);
-
-  SF _fst2;
-
-  std::string input = "play gundam z by macross delta";
   for (const auto& c : input)
     st.AddSymbol(std::string(1, c));
 
+  SF _fst2;
   _fst2.AddState();
   _fst2.SetStart(0);
 
@@ -129,7 +120,7 @@ int main() {
     ps = s;
   }
 
-  _fst2.SetFinal(ps/*, 0*/);
+  _fst2.SetFinal(ps, 0);
 
   _fst2.Write("two.fst");
 
@@ -150,9 +141,10 @@ int main() {
 
   if (_fst4.NumStates() == 0) {
     std::cout << "no patterns matched" << std::endl;
-    return 0;
+    return;
   }
 
+  int pw = 0;
   std::string ne_str = "";
   int ss = _fst4.Start();
   while (_fst4.NumArcs(ss) > 0) {
@@ -163,18 +155,45 @@ int main() {
     }
 
     int w = aiter.Value().weight.Value();
-    if (w > 0) {
-      std::cout << nst.Find(w) << std::endl;
-      ne_str += st.Find(aiter.Value().ilabel);
-    }
-    else {
-      if (!ne_str.empty()) {
-        std::cout << ne_str << std::endl;
-        ne_str.clear();
+    if (w != pw) {
+      if (pw != 0 && !ne_str.empty()) {
+        std::cout << nst.Find(pw) << " : " << ne_str << std::endl;
       }
+      ne_str.clear();
     }
+    ne_str += st.Find(aiter.Value().ilabel);
+    pw = w;
     ss = aiter.Value().nextstate;
   }
-  if (!ne_str.empty())
-    std::cout << ne_str << std::endl;
+  if (pw != 0 && !ne_str.empty()) {
+    std::cout << nst.Find(pw) << " : " << ne_str << std::endl;
+  }
+
+}
+
+// TODO no consecutive *(play ** by *)
+// TODO no nested ne
+int main() {
+  std::vector<std::string> pats = {
+    "play {song} by {singer}",
+    "I'd like to listen {song} from {singer}",
+    "can I here {singer}'s {song} or {song}?",
+    "play {song} from {singer}"
+  };
+
+  fst::SymbolTable st, nst;
+  int sigma;
+
+  SF _pfst = load_pats(st, nst, &sigma, pats);
+
+  find_nes(st, nst, _pfst,
+      "play gundam z by macross delta");
+  find_nes(st, nst, _pfst,
+      "I'd like to listen from the hills from the hills");
+  find_nes(st, nst, _pfst,
+      "can I here Votoms's spirit or what or game or thrown?");
+  find_nes(st, nst, _pfst,
+      "play gundam z by from the hills");
+  find_nes(st, nst, _pfst,
+      "play gundam z from by the hills");
 }
